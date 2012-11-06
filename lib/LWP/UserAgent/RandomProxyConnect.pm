@@ -106,8 +106,9 @@ sub request
 
     # Get the proxy
     my $new_proxy = $self->get_current_proxy;
+    my $allowed_protocols = $self->get_allowed_protocols;
     # Set the proxy in the user agent
-    $self->proxy(['http','https'],$new_proxy);
+    $self->proxy($allowed_protocols,$new_proxy);
     
     # Set the "last proxy used" value
     $self->set_last_proxy($new_proxy);
