@@ -1,6 +1,6 @@
 package LWP::UserAgent::RandomProxyConnect;
 use base( "LWP::UserAgent" );
-
+use Data::Dumper;
 use 5.006;
 use strict;
 use warnings;
@@ -54,21 +54,33 @@ Furthermore, you can add as argument all the properties described at L<LWP::User
 sub new{
     
     my ($class, %arg) = @_;
-    my $ua = LWP::UserAgent->new;
     
-    # Extended attributes
-    $ua->{proxy_list}        = "path";
-    $ua->{current_proxy}     = "????:??";
-    $ua->{last_proxy}        = "????:??";
-    $ua->{protocol}          = "http";
-    $ua->{allowed_protocols} = ["http", "https"];
+    
+    
+    # Extended attributes declaration
+    my %def;
+    $def{proxy_list}        = delete $arg{proxy_list};
+    $def{protocol}          = "http"           unless delete $arg{protocol};
+    $def{allowed_protocols} = ["http","https"] unless delete $arg{allowed_protocols};
+    $def{current_proxy}     = "????:??";
+    $def{last_proxy}        = "????:??";
+    
+    # Create the SUPER object with the remaining arguments
+    my $ua = LWP::UserAgent->new(%arg);
+    
+    # And add the extended attributes
+    $ua->{proxy_list}        = $def{proxy_list};
+    $ua->{protocol}          = $def{protocol};
+    $ua->{allowed_protocols} = $def{allowed_protocols};
+    $ua->{current_proxy}     = $def{current_proxy};
+    $ua->{last_proxy}        = $def{last_proxy};
     
     # Let's load a new "current_proxy". By this way, if there are any errors
     # the object will stop.
     my $self = bless $ua, $class;
     
     # Let's load a random proxy!
-    $self->_renove_proxy;
+    $self->renove_proxy;
     
     return $self;
     
@@ -104,7 +116,7 @@ sub request
     $self->proxy($allowed_protocols,$new_proxy);
     
     # Set a new proxy for the next connection
-    $self->_renove_proxy;
+    $self->renove_proxy;
     
     # Set the "last proxy used" value
     $self->set_last_proxy($new_proxy);
@@ -163,13 +175,13 @@ Protocols allowed to stablish the communication.
 The protocol used to communicate. e.g.: if the specified protocol is "ftp",
 the absolute proxy URI will be:
 
-    ftp://proxy.url.or.ip/
+    ftp://proxy.url.or.ip:port/
 
 =cut
 
 =head1 METHODS FOR HANDLING THE PROXY LIST
 
-=head2 _renove_proxy
+=head2 renove_proxy
 
 This function returns a new random proxy from the list. This return value
 is a string with the format: <proxyUrlorIP>:<port>. This is just a query
@@ -177,11 +189,14 @@ for a single request.
 
 =cut
 
-sub _renove_proxy {
+sub renove_proxy {
+    
+    # This method must handle errors correctly; it is a critical test for
+    # proxy list integrity.
     
     my ($self) = @_;
     
-    open FH, "/Users/eiblab/Desktop/proxy_list.txt";
+    open FH, $self->get_proxy_list;
     my @provisional_proxy_list = <FH>;
     close FH;
     
