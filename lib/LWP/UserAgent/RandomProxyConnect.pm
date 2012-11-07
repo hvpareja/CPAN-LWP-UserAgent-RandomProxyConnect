@@ -22,9 +22,9 @@ our $VERSION = '0.10';
 
 =head1 SYNOPSIS
 
-This Object does exactly the same than the L<LWP::UserAgent> class with the a
-new feature: it can make each HTTP request throw a different proxy each time.
-Also, a few methods improve the proxy list management, and makes the iterative
+This Object does exactly the same than the L<LWP::UserAgent> class with a
+new useful feature: it can make each HTTP request throw a different proxy each
+time. Also, a few methods improve the proxy list management, and makes the iterative
 connections faster.
 
 =head1 CONSTRUCTOR
@@ -43,50 +43,39 @@ However, the class can be invoked as:
     
 the created object will search the file at the specified path.
 
-Furthermore, whatever the method you use to invoke the class, the object will
+Whatever the method you use to invoke the class, the object will
 stop if the specified file doest not exists, is not readable or there is no proxy
 found into it.
+
+Furthermore, you can add as argument all the properties described at L<LWP::UserAgent>
 
 =cut
 
 sub new{
     
     my ($class, %arg) = @_;
-    my $self = bless {}, $class;
+    my $ua = LWP::UserAgent->new;
     
-    # The following block is not really needed, but it is
-    # paste here for teaching reasons.
-    # The shorter way to set the unique attribute that the class
-    # need is like so:
-    #
-    # if($arg{-proxy-list}){
-    #   $self->set_proxy_list($arg{-proxy-list});      
-    # }
-    #
-    
-    # See below to see all attributes
-    foreach my $attribute ($self->_all_attributes()){
-        # E.g. attribute = "_name", argument = "name"
-        my ($argument) = ($attribute =~ /^_(.*)/);
-        # If explicitly given
-        if(exists $arg{$argument}){
-            $self->{$attribute} = $arg{$argument};
-        }
-        # Set to default
-        else{
-            $self->{$attribute} = $self->_attribute_default($attribute);            
-        }
-    }
+    # Extended attributes
+    $ua->{proxy_list}        = "path";
+    $ua->{current_proxy}     = "????:??";
+    $ua->{last_proxy}        = "????:??";
+    $ua->{protocol}          = "http";
+    $ua->{allowed_protocols} = ["http", "https"];
     
     # Let's load a new "current_proxy". By this way, if there are any errors
     # the object will stop.
+    my $self = bless $ua, $class;
+    
+    # Let's load a random proxy!
     $self->_renove_proxy;
     
     return $self;
     
 }
 
-=head1 THE EXTENDED METHOD
+
+=head1 THE EXTENDED REQUEST METHOD
 
 =head2 request
 
@@ -101,30 +90,58 @@ sub request
     
     my($self, $request, $arg, $size, $previous) = @_;
     
-    # Get a new proxy from the list
-    $self->_renove_proxy;
-
+    # I want to use the same method name to invoke the request, so I am
+    # overriding it in this block. However, I need the original (SUPER)
+    # method to do the request. So I'm going to replicate the object into
+    # a new LWP::UserAgent superclass.
+    
+    
     # Get the proxy
-    my $new_proxy = $self->get_current_proxy;
+    my $new_proxy         = $self->get_current_proxy;
     my $allowed_protocols = $self->get_allowed_protocols;
+    
     # Set the proxy in the user agent
     $self->proxy($allowed_protocols,$new_proxy);
+    
+    # Set a new proxy for the next connection
+    $self->_renove_proxy;
     
     # Set the "last proxy used" value
     $self->set_last_proxy($new_proxy);
     
     # Make the request
-    my $response = $self->SUPER->request($request,$arg,$size,$previous);
+    my $response = $self->SUPER::request($request,$arg,$size,$previous);
     
     # Return exactly the same than LWP::UserAgeng->request($request) method
     return ($response);
     
 }
 
+# Override the proxy methods
+#sub proxy{
+#    my ($self) = @_;
+#
+#    carp(<<EOF);
+#\nWARNING:\nBad class usage: The method LWP::UserAgent::RandomProxyConnect->proxy is incompatible with the philosophy of this class and it has been disabled, the proxy is randomized by this class and it can't be set as static. You can use the LWP::UserAgent class to do it yourself.
+#The execution continue ignoring this warning.
+#EOF
+#
+#}
+sub env_proxy{
+    my ($self) = @_;
+    carp(<<EOF);
+\nWARNING:\nBad class usage: The method LWP::UserAgent::RandomProxyConnect->env_proxy is incompatible with the philosophy of this class and it has been disabled, the proxy is randomized by this class and it can't be set as static. You can use the LWP::UserAgent class to do it yourself.
+The execution continue ignoring this warning.
+EOF
+
+}
 
 =head1 ATTRIBUTES
 
-=head2 proxy_list
+As inherited class from LWP::UserAgent, it contains the described attributes at
+L<LWP::UserAgent>, but there is some new attributes in this class:
+
+=head2 proxy_list (Default value: $ENV{"PROXY_LIST"})
 
 The C<proxy_list> attribute contains the string with the proxy list file path.
 The accessor method:
@@ -137,33 +154,18 @@ Also it can be set by the mutator method:
 
     $obj->set_proxy_list($new_proxy_list_value);
 
-=head2 allowed_protocols
+=head2 protocols_allowed (Default value: ['http','https'])
+
+Protocols allowed to stablish the communication.
+
+=head2 protocol (Default value: 'http')
+
+The protocol used to communicate. e.g.: if the specified protocol is "ftp",
+the absolute proxy URI will be:
+
+    ftp://proxy.url.or.ip/
 
 =cut
-{
-    # A list of all attributes wiht default values and read/write/required properties
-    my %_attribute_properties = (
-        _proxy_list        => [$ENV{"PROXY_LIST"}, "read.write"], # The path to the proxy list file
-        _allowed_protocols => [['http','https'], "read.write"],
-        _current_proxy     => ["????:??", "read.write"],
-        _last_proxy        => ["????:??", "read.write"]
-    );
-    
-    # The list of all attributes
-    sub _all_attributes {
-        keys %_attribute_properties;
-    }
-    
-    # Return the default value for a given attribute
-    sub _attribute_default{
-        my ($self,$attribute) = @_;
-        $_attribute_properties{$attribute}[0];
-    }
-    
-}
-
-
-
 
 =head1 METHODS FOR HANDLING THE PROXY LIST
 
@@ -179,12 +181,22 @@ sub _renove_proxy {
     
     my ($self) = @_;
     
-    if(1){
-        my $obj_name = ref($self);
-        #croak("The object ".$obj_name." could not load any proxy at ".$self->get_proxy_list."\n");
-    }
+    open FH, "/Users/eiblab/Desktop/proxy_list.txt";
+    my @provisional_proxy_list = <FH>;
+    close FH;
     
-    return 0;
+    my $random_proxy = $provisional_proxy_list[rand @provisional_proxy_list];
+    my $protocol = $self->get_protocol;
+    
+    $self->set_current_proxy($protocol."://".$random_proxy);
+    
+    return 1;
+    
+    #if(1){
+    #    my $obj_name = ref($self);
+    #    croak("The object ".$obj_name." could not load any proxy at ".$self->get_proxy_list."\n");
+    #}
+    
     
 }
 
@@ -201,7 +213,7 @@ sub AUTOLOAD{
     
     my ($self,$newvalue) = @_;
     
-    my ($operation,$attribute) = ($AUTOLOAD =~ /(get|set)(_\w+)$/);
+    my ($operation,$attribute) = ($AUTOLOAD =~ /(get|set)_(\w+)$/);
     
     # Is this a legal method name?
     unless($operation && $attribute){ croak "Method name $AUTOLOAD is not the recogniced form (get|set)_attribute\n"; }
@@ -235,18 +247,7 @@ sub DESTROY{
     my $self = @_;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
+__END__
 
 =head1 AUTHOR
 
