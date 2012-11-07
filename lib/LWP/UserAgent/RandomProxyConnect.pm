@@ -113,7 +113,7 @@ sub request
     my $allowed_protocols = $self->get_allowed_protocols;
     
     # Set the proxy in the user agent
-    $self->proxy($allowed_protocols,$new_proxy);
+    $self->SUPER::proxy($allowed_protocols,$new_proxy);
     
     # Set a new proxy for the next connection
     $self->renove_proxy;
@@ -129,15 +129,14 @@ sub request
     
 }
 
+# I can't do that, and I don't know why!!
 # Override the proxy methods
 #sub proxy{
 #    my ($self) = @_;
-#
 #    carp(<<EOF);
 #\nWARNING:\nBad class usage: The method LWP::UserAgent::RandomProxyConnect->proxy is incompatible with the philosophy of this class and it has been disabled, the proxy is randomized by this class and it can't be set as static. You can use the LWP::UserAgent class to do it yourself.
 #The execution continue ignoring this warning.
 #EOF
-#
 #}
 sub env_proxy{
     my ($self) = @_;
@@ -201,6 +200,7 @@ sub renove_proxy {
     close FH;
     
     my $random_proxy = $provisional_proxy_list[rand @provisional_proxy_list];
+    chomp($random_proxy);
     my $protocol = $self->get_protocol;
     
     $self->set_current_proxy($protocol."://".$random_proxy);
